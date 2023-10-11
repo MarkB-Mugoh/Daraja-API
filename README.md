@@ -24,7 +24,7 @@ we will use:
 - 
 ## Step 5: Obtain the Access Token
 
-To interact with the Safaricom Daraja API, you must obtain an access token from the OAuth API after creating an app in the developers dashboard
+To interact with the Safaricom Daraja API, you must obtain an access token from the OAuth API [https://developer.safaricom.co.ke/APIs/Authorization] after creating an app in the developers dashboard
 
 ```csharp
 using System;
@@ -81,6 +81,92 @@ Parse the access token from the response content and store it for subsequent API
 ## step 7 : STK Push
 
 Use M-Pesa Express (https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate)  to make an SDK Push
+```csharp
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Net.Http.Headers;
+using Newtonsoft.Json;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Include your access token here
+        string accessToken = "YourAccessToken";
+
+        // Safaricom STK Push API endpoint and callback URL
+        string stkPushUrl = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
+        string callbackUrl = "https://your-callback-url.com/callback";
+
+        // Business credentials
+        string businessShortCode = ""; // shpuld provide from the business
+        string passkey = ""; // shpuld provide from the business
+
+        // Construct timestamp
+        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+
+        // Construct password (base64 encoded)
+        string password = Convert.ToBase64String(Encoding.UTF8.GetBytes(businessShortCode + passkey + timestamp));
+
+        // STK Push parameters
+        string phone = ""; // Phone number to receive the STK push e.g 254710777093
+        string money = "1";
+        string partyA = phone;
+        string partyB = ""; e.g //254710777093
+        string accountReference = ""; //e.g SoarmaxElite ltd
+        string transactionDesc = "stkpush test";
+        string amount = money;
+
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var stkPushData = new Dictionary<string, string>
+            {
+                { "BusinessShortCode", businessShortCode },
+                { "Password", password },
+                { "Timestamp", timestamp },
+                { "TransactionType", "CustomerPayBillOnline" },
+                { "Amount", amount },
+                { "PartyA", partyA },
+                { "PartyB", businessShortCode },
+                { "PhoneNumber", partyA },
+                { "CallBackURL", callbackUrl },
+                { "AccountReference", accountReference },
+                { "TransactionDesc", transactionDesc }
+            };
+
+            string jsonData = JsonConvert.SerializeObject(stkPushData);
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(stkPushUrl, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string responseContent = await response.Content.ReadAsStringAsync();
+                var data = JsonConvert.DeserializeObject<dynamic>(responseContent);
+
+                string checkoutRequestID = data.CheckoutRequestID;
+                string responseCode = data.ResponseCode;
+
+                if (responseCode == "0")
+                {
+                    Console.WriteLine($"The CheckoutRequestID for this transaction is: {checkoutRequestID}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.StatusCode}");
+            }
+        }
+    }
+}
+
+```
 
 ## Step 4: Make API Requests
 
