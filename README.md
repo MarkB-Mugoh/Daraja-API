@@ -22,7 +22,8 @@ we will use:
 - Authorization (OAuth) : This API generates the tokens for authenticating your API calls. This is the first API you will engage with within the set of APIs available because all the other APIs require authentication information from this API to work.
 - M-Pesa Express : Merchant initiated online payments
 - Customer To Business Register URL
-- 
+- Transaction Status
+  
 ## Step 5: Obtain the Access Token
 
 To interact with the Safaricom Daraja API, you must obtain an access token from the OAuth API [https://developer.safaricom.co.ke/APIs/Authorization] after creating an app in the developers dashboard
@@ -535,22 +536,74 @@ we listen for POST requests at the specified URL (http://localhost:8080/). When 
 
 Make sure to adjust the URL, log file name, and other details as needed for your specific C2B callback handling.
 
+## Step 10: Transaction status Check
+We can use the customers transaction code to validate that the transaction was successful.
 
+Here is an example code
 
+```csharp
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
 
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Include your access token here
+        string accessToken = "YourAccessToken";
 
+        // Safaricom Transaction Status Query API endpoint
+        string transactionStatusUrl = "https://sandbox.safaricom.co.ke/mpesa/transactionstatus/v1/query";
 
+        // Transaction details
+        string initiatorName = "testapi";
+        string securityCredential = "Safaricom999!*!";
+        string transactionID = "NEF61H8J60";
+        string businessShortCode = "600782";
+        string phone = "254708374149";
+        string originatorConversationID = "AG_20230719_201016fd6d6977cbe285";
 
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
+            var request_data = new
+            {
+                Initiator = initiatorName,
+                SecurityCredential = securityCredential,
+                CommandID = "TransactionStatusQuery",
+                TransactionID = transactionID,
+                OriginatorConversationID = originatorConversationID,
+                PartyA = businessShortCode,
+                IdentifierType = 4,
+                ResultURL = "https://your-callback-url.com/ResultURL.php",
+                QueueTimeOutURL = "https://your-callback-url.com/QueueTimeOutURL.php",
+                Remarks = "OK",
+                Occasion = "OK"
+            };
 
+            string jsonData = Newtonsoft.Json.JsonConvert.SerializeObject(request_data);
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
+            var response = await client.PostAsync(transactionStatusUrl, content);
 
+            if (response.IsSuccessStatusCode)
+            {
+                string responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(responseContent);
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.StatusCode}");
+            }
+        }
+    }
+}
 
-
-
-
-
-Remember to refer to the [official Safaricom Daraja API documentation](https://developer.safaricom.co.ke/daraja/apis/postman-collection) for detailed API specifications and additional resources.
 ```
 
-In the above Markdown document, I've added a placeholder for the video link (replace `"https://www.youtube.com/watch?v=your-video-link"` with the actual URL) and a reference to the [official Safaricom Daraja API documentation](https://developer.safaricom.co.ke/daraja/apis/postman-collection). You can replace the placeholders with the actual video link and documentation URL.
+replace "YourAccessToken" with your actual access token and adjust other parameters as needed for your specific transaction status query. Also, replace "https://your-callback-url.com/ResultURL.php" and "https://your-callback-url.com/QueueTimeOutURL.php" with your actual callback URLs.
