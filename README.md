@@ -21,6 +21,7 @@ Which product(s) should be mapped to this app?  Click all checkboxes
 we will use:
 - Authorization (OAuth) : This API generates the tokens for authenticating your API calls. This is the first API you will engage with within the set of APIs available because all the other APIs require authentication information from this API to work.
 - M-Pesa Express : Merchant initiated online payments
+- Customer To Business Register URL
 - 
 ## Step 5: Obtain the Access Token
 
@@ -303,40 +304,251 @@ Below is an example of the JSON response from an STK (Lipa Na M-Pesa) Callback:
   }
 }
 ```
+## Step 8: STK Push transaction status 
 
-## Step 4: Make API Requests
+Check the status of a Lipa Na M-Pesa Online Payment.
 
-With the access token obtained, you can now make requests to the Safaricom Daraja API.
+IS the transaction successful or did the user cancel or he doesn't have enough money in their account / Fuliza ?
 
 ```csharp
-// Replace with your actual access token
-string accessToken = "YourAccessToken";
-string darajaApiUrl = "https://api.safaricom.co.ke/daraja/";
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
 
-using (HttpClient client = new HttpClient())
+class Program
 {
-    var request = new HttpRequestMessage(HttpMethod.Get, darajaApiUrl + "your-endpoint-here");
-    request.Headers.Add("Authorization", $"Bearer {accessToken}");
-    // Add any necessary request parameters here
-
-    HttpResponseMessage response = await client.SendAsync(request);
-
-    if (response.IsSuccessStatusCode)
+    static async Task Main(string[] args)
     {
-        string responseContent = await response Content.ReadAsStringAsync();
-        Console.WriteLine(responseContent);
-        // Process the API response as needed.
+        // Include your access token here
+        string accessToken = "YourAccessToken";
+
+        // Safaricom STK Push Query API endpoint
+        string stkQueryUrl = "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query";
+
+        // Business credentials
+        string businessShortCode = "174379";
+        string passkey = "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+
+        // Construct timestamp
+        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+
+        // Construct password (base64 encoded)
+        string password = Convert.ToBase64String(Encoding.UTF8.GetBytes(businessShortCode + passkey + timestamp));
+
+        // The CheckoutRequestID obtained from the STK Push request
+        string checkoutRequestID = "ws_CO_03072023054410314768168060";
+
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var stkQueryData = new
+            {
+                BusinessShortCode = businessShortCode,
+                Password = password,
+                Timestamp = timestamp,
+                CheckoutRequestID = checkoutRequestID
+            };
+
+            string jsonData = Newtonsoft.Json.JsonConvert.SerializeObject(stkQueryData);
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(stkQueryUrl, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string responseContent = await response.Content.ReadAsStringAsync();
+                dynamic data = Newtonsoft.Json.JsonConvert.DeserializeObject(responseContent);
+
+                if (data.ResultCode != null)
+                {
+                    int resultCode = data.ResultCode;
+                    string message = GetResultMessage(resultCode);
+                    Console.WriteLine(message);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.StatusCode}");
+            }
+        }
     }
-    else
+
+    static string GetResultMessage(int resultCode)
     {
-        Console.WriteLine($"Error: {response.StatusCode}");
+        switch (resultCode)
+        {
+            case 1037:
+                return "1037 Timeout in completing transaction";
+            case 1032:
+                return "1032 Transaction has been cancelled by the user";
+            case 1:
+                return "1 The balance is insufficient for the transaction";
+            case 0:
+                return "0 The transaction was successful";
+            default:
+                return "Unknown Result Code";
+        }
     }
 }
 ```
 
-Make sure to replace "YourAccessToken" with the actual access token obtained earlier and use the appropriate Daraja API endpoint URL and request parameters for your specific integration.
+make sure to replace "YourAccessToken" with your actual access token and adjust other parameters as needed for your specific STK Push Query. The GetResultMessage method maps the ResultCode to the corresponding message based on the Safaricom Daraja API documentation.
 
-This comprehensive guide outlines the process for integrating the Safaricom Daraja API into your ASP.NET application using C#. You can build upon this foundation to create the specific features you need for your application.
+## Step 9 : Customer To Business URL
+
+Register URL API works hand in hand with Customer to Business (C2B) APIs and allows receiving payment notifications to your paybill. This API enables you to register the callback URLs via which you shall receive notifications for payments to your pay bill/till number.
+
+There are two URLs required for Register URL API: Validation URL and Confirmation URL.
+
+-Validation URL: This is the URL that is only used when a Merchant (Partner) requires to validate the details of the payment before accepting. For example, a bank would want to verify if an account number exists in their platform before accepting a payment from the customer.
+
+-Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
+
+NB: C2B Transaction Validation is an optional feature that needs to be activated on M-Pesa, the owner of the shortcode needs to make this request for activation by emailing us at apisupport@safaricom.co.ke or M-pesabusiness@safaricom.co.ke  if they need their transactions validated before execution.
+
+### URL Requirements
+- Use publicly available (Internet-accessible) IP addresses or domain names.
+- All Production URLs must be HTTPS, on Sandbox you're allowed to simulate using HTTP.
+- Avoid using keywords such as M-PESA, M-Pesa, M-Pesa, Safaricom, exe, exec, cmd, SQL, query, or any of their variants in either upper or lower cases in your URLs.
+- Do not use public URL testers e.g. ngrok, mockbin, or requestbin, especially on production, they are also usually blocked by the API. Use your own application URLs and do not make them public or share them with any of your peers.
+
+A comprehensive guide on this and a flowchart is available at : https://developer.safaricom.co.ke/APIs/CustomerToBusinessRegisterURL
+
+### code for registering C2B URLs 
+
+```csharp
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Include your access token here
+        string accessToken = "YourAccessToken";
+
+        // Safaricom C2B Register URL endpoint
+        string registerUrl = "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl";
+
+        // Your business short code
+        string businessShortCode = "YourBusinessShortCode";
+
+        // Confirmation and validation URLs
+        string confirmationUrl = "https://your-callback-url.com/confirmation_url";  //Remeber to adjust this to fit our application
+        string validationUrl = "https://your-callback-url.com/validation_url"; //Remeber to adjust this to fit our application
+
+
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var c2bRegistrationData = new
+            {
+                ShortCode = businessShortCode,
+                ResponseType = "Completed",
+                ConfirmationURL = confirmationUrl,
+                ValidationURL = validationUrl
+            };
+
+            string jsonData = Newtonsoft.Json.JsonConvert.SerializeObject(c2bRegistrationData);
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(registerUrl, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(responseContent);
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.StatusCode}");
+            }
+        }
+    }
+}
+```
+### Confirmation URL - code for handling the C2B callback confirmation response
+
+```csharp
+using System;
+using System.IO;
+using System.Net;
+using System.Text;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        HttpListener listener = new HttpListener();
+        listener.Prefixes.Add("http://localhost:8080/"); // Adjust the URL as needed
+        listener.Start();
+
+        Console.WriteLine("Listening for C2B Callback...");
+
+        while (true)
+        {
+            HttpListenerContext context = listener.GetContext();
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+
+            if (request.HttpMethod == "POST")
+            {
+                // Read the C2B Callback response
+                using (Stream body = request.InputStream)
+                {
+                    using (StreamReader reader = new StreamReader(body, request.ContentEncoding))
+                    {
+                        string c2bCallbackResponse = reader.ReadToEnd();
+                        Console.WriteLine("Received C2B Callback Response: " + c2bCallbackResponse);
+
+                        // Log the callback response to a file
+                        string logFile = "C2bPesaResponse.json";
+                        File.AppendAllText(logFile, c2bCallbackResponse);
+
+                        // Send a confirmation response
+                        string confirmationResponse = "{ \"ResultCode\": 0, \"ResultDesc\": \"Confirmation Received Successfully\" }";
+                        byte[] buffer = Encoding.UTF8.GetBytes(confirmationResponse);
+
+                        response.ContentLength64 = buffer.Length;
+                        Stream output = response.OutputStream;
+                        output.Write(buffer, 0, buffer.Length);
+                        output.Close();
+                    }
+                }
+            }
+
+            response.Close();
+        }
+    }
+}
+
+```
+we listen for POST requests at the specified URL (http://localhost:8080/). When a POST request is received (which should be the C2B Callback response), it's logged to a file and a confirmation response is sent back to the Safaricom server.
+
+Make sure to adjust the URL, log file name, and other details as needed for your specific C2B callback handling.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Remember to refer to the [official Safaricom Daraja API documentation](https://developer.safaricom.co.ke/daraja/apis/postman-collection) for detailed API specifications and additional resources.
 ```
