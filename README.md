@@ -607,3 +607,15 @@ class Program
 ```
 
 replace "YourAccessToken" with your actual access token and adjust other parameters as needed for your specific transaction status query. Also, replace "https://your-callback-url.com/ResultURL.php" and "https://your-callback-url.com/QueueTimeOutURL.php" with your actual callback URLs.
+
+---
+**Contact Information**
+
+If you have any questions or need assistance with this integration, please feel free to contact us:
+
+- **Email:** [support@soarmaxelite.com](mailto:support@soarmaxelite.com) or [markbmugo@gmail.com](mailto:markbmugo@gmail.com) 
+- **Skype/ WhatsApp:** +254-710-777-093
+- github : https://github.com/MarkB-Mugoh
+
+Thank you for choosing our services!
+
